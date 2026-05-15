@@ -219,13 +219,34 @@ export async function GET() {
     .sort((a, b) => b.score - a.score)
     .map((trend, index) => ({ ...trend, rank: index + 1 }));
 
-  const alphaSignals = trends.slice(0, 4).map((trend) => ({
-    title: trend.title,
-    category: trend.category,
-    alpha: Math.max(65, trend.score - Math.round(trend.noise / 12)),
-    stage: trend.score >= 88 ? "Emerging" : "Early Signal",
-    reason: `Google Trends 매칭 ${trend.googleHits}개, 뉴스/웹 신호 ${trend.liveCount}건. 노이즈 위험 ${trend.noise}/100으로 보정했습니다.`,
-  }));
+  // Alpha는 "이미 큰 트렌드"가 아니라 "아직 작지만 빠르게 커지는 신호"를 찾는 영역입니다.
+  // 따라서 score 순위 그대로가 아니라:
+  // 1) 관심 속도(attention)가 높고
+  // 2) 노이즈가 낮고
+  // 3) 너무 메인스트림화되지 않은 것
+  // 4) Google Trends 또는 뉴스 신호가 최소 1개 이상 있는 것
+  // 을 우선합니다.
+  const alphaSignals = trends
+    .map((trend) => {
+      const earlyBonus = trend.score < 90 ? 10 : 0;
+      const noisePenalty = Math.round(trend.noise * 0.35);
+      const signalBonus = trend.googleHits > 0 ? 8 : 0;
+      const alpha = Math.round(
+        Math.min(98, Math.max(45, trend.attention * 0.55 + trend.score * 0.35 + earlyBonus + signalBonus - noisePenalty))
+      );
+
+      return {
+        title: trend.title,
+        category: trend.category,
+        alpha,
+        stage: alpha >= 85 ? "Emerging" : alpha >= 72 ? "Early Signal" : "Watch",
+        confidence: Math.max(35, Math.min(90, 45 + trend.googleHits * 10 + Math.min(25, trend.liveCount))),
+        reason: `관심 속도 ${trend.attention}/100, 유동성 프록시 ${trend.liquidity}/100, 노이즈 위험 ${trend.noise}/100. Google Trends 매칭 ${trend.googleHits}개와 뉴스/웹 신호 ${trend.liveCount}건을 함께 보정했습니다.`,
+      };
+    })
+    .filter((signal) => signal.alpha >= 60)
+    .sort((a, b) => b.alpha - a.alpha)
+    .slice(0, 5);
 
   return NextResponse.json(
     {

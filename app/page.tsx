@@ -33,6 +33,33 @@ const fallbackTrends = [
   { rank: 5, title: "저속노화 라이프스타일", category: "Lifestyle", score: 82, interest: "+29%", momentum: "Medium High", mood: "통제감", summary: "식단, 운동, 수면, 루틴 콘텐츠로 확장.", tags: ["건강", "수면"], attention: 76, liquidity: 68, noise: 28, source: "Demo" },
 ];
 
+const fallbackAlpha = [
+  {
+    title: "개인 홈페이지 부활",
+    category: "Culture / Web",
+    alpha: 87,
+    stage: "Early Signal",
+    reason: "SNS 피로감 이후 자기 세계관을 직접 만들고 싶어하는 흐름입니다.",
+    confidence: 62,
+  },
+  {
+    title: "종이 콜라주 감성",
+    category: "Visual",
+    alpha: 84,
+    stage: "Emerging",
+    reason: "AI 이미지가 많아질수록 손으로 만든 듯한 물성과 아날로그 질감이 주목받습니다.",
+    confidence: 58,
+  },
+  {
+    title: "조용한 팬덤형 브랜드",
+    category: "Brand",
+    alpha: 81,
+    stage: "Early Signal",
+    reason: "큰 광고보다 작은 커뮤니티와 세계관을 가진 브랜드에 오래 머무는 흐름입니다.",
+    confidence: 55,
+  },
+];
+
 function ChangePill({ up, change }: { up: boolean; change: string }) {
   return (
     <span className={`flex items-center gap-1 text-sm font-medium ${up ? "text-emerald-400" : "text-red-400"}`}>
@@ -64,7 +91,7 @@ function StatusPill({ status }: { status: string }) {
 export default function Page() {
   const [market, setMarket] = useState(fallbackMarket);
   const [trends, setTrends] = useState(fallbackTrends);
-  const [alpha, setAlpha] = useState<any[]>([]);
+  const [alpha, setAlpha] = useState<any[]>(fallbackAlpha);
   const [googleTop, setGoogleTop] = useState<any[]>([]);
   const [marketStatus, setMarketStatus] = useState("Connecting live data");
   const [trendStatus, setTrendStatus] = useState("Connecting trend data");
@@ -101,6 +128,7 @@ export default function Page() {
         throw new Error("bad trend data");
       }
     } catch {
+      setAlpha(fallbackAlpha);
       setTrendStatus("Demo trend data");
     }
 
@@ -303,9 +331,13 @@ export default function Page() {
 
           <aside className="space-y-6">
             <section className="rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
-              <div className="mb-4 flex items-center gap-2"><Flame size={20} className="text-[#d7c4a1]" /><h3 className="text-xl font-semibold">Alpha Signals</h3></div>
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2"><Flame size={20} className="text-[#d7c4a1]" /><h3 className="text-xl font-semibold">Alpha Signals</h3></div>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-zinc-400">Beta</span>
+              </div>
+              <p className="mb-4 text-xs leading-5 text-zinc-500">초기 신호는 단순 랭킹이 아니라, 관심 상승률은 높은데 아직 메인스트림 볼륨은 낮고 노이즈가 낮은 후보를 우선 표시합니다.</p>
               <div className="space-y-3">
-                {(alpha.length ? alpha : []).map((signal, index) => (
+                {(alpha.length ? alpha : fallbackAlpha).map((signal, index) => (
                   <div key={signal.title} className="rounded-3xl border border-white/10 bg-white/5 p-4">
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div><div className="text-sm text-zinc-500">#{index + 1} · {signal.category}</div><h4 className="mt-1 font-semibold text-white">{signal.title}</h4></div>
