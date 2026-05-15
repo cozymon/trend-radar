@@ -1,19 +1,13 @@
-# Trend Radar
+# Trend Radar v0.2
 
-초보자용 Vercel 배포 패키지입니다.
+변경점:
+- 시장 데이터 1d/5m 기준으로 개선
+- Altcoin Total Market Cap → Crypto Ex-BTC Market Cap으로 표기 수정
+- 트렌드 API를 1시간 캐시 방식으로 변경
+- Google Trends Daily 신호 + GDELT 뉴스/웹 신호 결합
+- Attention Flow Map 추가
+- Google Rising Searches 리스트 추가
 
-## 가장 쉬운 배포 방법
-
-1. 이 폴더 전체를 GitHub 새 저장소에 업로드합니다.
-2. Vercel.com에 로그인합니다.
-3. Add New → Project를 누릅니다.
-4. GitHub 저장소를 선택합니다.
-5. Framework Preset이 Next.js인지 확인합니다.
-6. Deploy를 누릅니다.
-
-배포 후 아래 주소도 확인하세요.
-
-- /api/market-context
-- /api/trend-signals
-
-둘 다 JSON이 보이면 실제 API 연결이 된 것입니다.
+업로드:
+GitHub 저장소에서 Add file → Upload files로 이 폴더 안의 파일들을 모두 업로드하고 Commit changes를 누르세요.
+Vercel은 자동으로 다시 배포됩니다.

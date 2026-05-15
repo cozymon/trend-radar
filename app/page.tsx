@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Radar, Search, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Radar,
+  Search,
+  SlidersHorizontal,
+  RefreshCcw,
+  Activity,
+  Sparkles,
+  Flame,
+} from "lucide-react";
 
 const fallbackMarket = [
   { key: "usdkrw", label: "USD/KRW", value: "—", change: "—", up: true, note: "수입물가 압박", source: "Demo" },
@@ -12,67 +22,104 @@ const fallbackMarket = [
   { key: "gold", label: "Gold", value: "—", change: "—", up: true, note: "안전자산 선호", source: "Demo" },
   { key: "oil", label: "Oil", value: "—", change: "—", up: false, note: "생활비 영향", source: "Demo" },
   { key: "btc", label: "BTC", value: "—", change: "—", up: true, note: "디지털 자산 심리", source: "Demo" },
-  { key: "altcap", label: "Altcoin Total Market Cap", value: "—", change: "—", up: false, note: "알트 시장 흐름", source: "Demo" },
+  { key: "cryptoExBtc", label: "Crypto Ex-BTC Market Cap", value: "—", change: "—", up: false, note: "BTC 제외 크립토 시총", source: "Demo" },
 ];
 
 const fallbackTrends = [
-  { rank: 1, title: "죄책감 없는 디저트", category: "Food", score: 94, interest: "+42%", momentum: "Very High", mood: "작은 사치", summary: "맛있는 걸 먹고 싶지만 건강도 놓치고 싶지 않은 심리.", tags: ["말차", "그릭요거트", "저당"] },
-  { rank: 2, title: "촌스럽지만 귀여운 아날로그 감성", category: "Culture", score: 91, interest: "+38%", momentum: "High", mood: "향수", summary: "디카, 콜라주, 종이 질감, 캠 감성이 연결됨.", tags: ["Y2K", "디카", "콜라주"] },
-  { rank: 3, title: "AI와 함께 일하는 개인 창작자", category: "Tech / Lifestyle", score: 88, interest: "+35%", momentum: "High", mood: "효율과 불안", summary: "개인이 툴을 조합해 생산성을 높이는 흐름.", tags: ["AI workflow", "1인 창작"] },
-  { rank: 4, title: "못생긴 귀여움", category: "Mood / Character", score: 84, interest: "+31%", momentum: "High", mood: "귀여움", summary: "살짝 이상하고 웃긴 캐릭터에 반응하는 흐름.", tags: ["ugly cute", "meme"] },
-  { rank: 5, title: "저속노화 라이프스타일", category: "Lifestyle", score: 82, interest: "+29%", momentum: "Medium High", mood: "통제감", summary: "식단, 운동, 수면, 루틴 콘텐츠로 확장.", tags: ["건강", "수면"] },
+  { rank: 1, title: "죄책감 없는 디저트", category: "Food", score: 94, interest: "+42%", momentum: "Very High", mood: "작은 사치", summary: "맛있는 걸 먹고 싶지만 건강도 놓치고 싶지 않은 심리.", tags: ["말차", "그릭요거트", "저당"], attention: 84, liquidity: 72, noise: 22, source: "Demo" },
+  { rank: 2, title: "촌스럽지만 귀여운 아날로그 감성", category: "Culture", score: 91, interest: "+38%", momentum: "High", mood: "향수", summary: "디카, 콜라주, 종이 질감, 캠 감성이 연결됨.", tags: ["Y2K", "디카", "콜라주"], attention: 78, liquidity: 45, noise: 30, source: "Demo" },
+  { rank: 3, title: "AI와 함께 일하는 개인 창작자", category: "Tech / Lifestyle", score: 88, interest: "+35%", momentum: "High", mood: "효율과 불안", summary: "개인이 툴을 조합해 생산성을 높이는 흐름.", tags: ["AI workflow", "1인 창작"], attention: 88, liquidity: 82, noise: 38, source: "Demo" },
+  { rank: 4, title: "못생긴 귀여움", category: "Mood / Character", score: 84, interest: "+31%", momentum: "High", mood: "귀여움", summary: "살짝 이상하고 웃긴 캐릭터에 반응하는 흐름.", tags: ["ugly cute", "meme"], attention: 71, liquidity: 36, noise: 45, source: "Demo" },
+  { rank: 5, title: "저속노화 라이프스타일", category: "Lifestyle", score: 82, interest: "+29%", momentum: "Medium High", mood: "통제감", summary: "식단, 운동, 수면, 루틴 콘텐츠로 확장.", tags: ["건강", "수면"], attention: 76, liquidity: 68, noise: 28, source: "Demo" },
 ];
+
+function ChangePill({ up, change }: { up: boolean; change: string }) {
+  return (
+    <span className={`flex items-center gap-1 text-sm font-medium ${up ? "text-emerald-400" : "text-red-400"}`}>
+      {up ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+      {change}
+    </span>
+  );
+}
+
+function ScoreBar({ value }: { value: number }) {
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+      <div className="h-full rounded-full bg-[#d7c4a1]" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const good = status.includes("Live") || status.includes("Partial") || status.includes("Google");
+  return (
+    <div className={`rounded-full border px-3 py-1 text-xs ${
+      good ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-amber-300/20 bg-amber-300/10 text-amber-200"
+    }`}>
+      {status}
+    </div>
+  );
+}
 
 export default function Page() {
   const [market, setMarket] = useState(fallbackMarket);
   const [trends, setTrends] = useState(fallbackTrends);
-  const [alpha, setAlpha] = useState([]);
+  const [alpha, setAlpha] = useState<any[]>([]);
+  const [googleTop, setGoogleTop] = useState<any[]>([]);
   const [marketStatus, setMarketStatus] = useState("Connecting live data");
   const [trendStatus, setTrendStatus] = useState("Connecting trend data");
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [selected, setSelected] = useState(fallbackMarket.map((x) => x.key));
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/market-context", { cache: "no-store" });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setMarket(data);
-          setMarketStatus(data.every((x) => x.source && x.source !== "Demo") ? "Live market data" : "Partial live data");
-        } else {
-          throw new Error("bad market data");
-        }
-      } catch {
-        setMarketStatus("Demo fallback");
+  const loadData = async () => {
+    try {
+      setMarketStatus("Refreshing market data");
+      const res = await fetch("/api/market-context?fresh=1", { cache: "no-store" });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMarket(data);
+        setMarketStatus(data.every((x) => x.source && x.source !== "Demo") ? "Live market data" : "Partial live data");
+      } else {
+        throw new Error("bad market data");
       }
-
-      try {
-        const res = await fetch("/api/trend-signals", { cache: "no-store" });
-        const data = await res.json();
-        if (data?.trends) {
-          setTrends(data.trends);
-          setAlpha(data.alphaSignals || []);
-          setTrendStatus("Live news signals");
-        } else {
-          throw new Error("bad trend data");
-        }
-      } catch {
-        setTrendStatus("Demo trend data");
-      }
+    } catch {
+      setMarketStatus("Demo fallback");
     }
 
-    load();
-    const timer = setInterval(load, 60000);
-    return () => clearInterval(timer);
+    try {
+      setTrendStatus("Refreshing trend data");
+      const res = await fetch("/api/trend-signals?fresh=1", { cache: "no-store" });
+      const data = await res.json();
+      if (data?.trends) {
+        setTrends(data.trends);
+        setAlpha(data.alphaSignals || []);
+        setGoogleTop(data.googleTopSearches || []);
+        setTrendStatus(data.sourceLabel || "Google Trends + News signals");
+      } else {
+        throw new Error("bad trend data");
+      }
+    } catch {
+      setTrendStatus("Demo trend data");
+    }
+
+    setUpdatedAt(new Date());
+  };
+
+  useEffect(() => {
+    loadData();
+    const marketTimer = setInterval(loadData, 60_000);
+    return () => clearInterval(marketTimer);
   }, []);
 
   const visibleMarket = market.filter((item) => selected.includes(item.key));
   const visibleTrends = trends.filter((t) => {
     const q = query.toLowerCase().trim();
-    return !q || t.title.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
+    return !q || t.title.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || (t.tags || []).some((tag: string) => tag.toLowerCase().includes(q));
   });
+
+  const topSignal = trends[0];
 
   return (
     <main className="min-h-screen bg-[#070b0f] text-zinc-100">
@@ -89,9 +136,14 @@ export default function Page() {
                 <p className="text-sm text-zinc-400">사람들의 마음이 움직이는 방향을 읽다</p>
               </div>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={17} />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="트렌드, 감정, 음식, 문화 검색" className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-500 sm:w-80" />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={17} />
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="트렌드, 감정, 음식, 문화 검색" className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-500 sm:w-80" />
+              </div>
+              <button onClick={loadData} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#d7c4a1] px-4 text-sm font-medium text-zinc-950 hover:bg-[#e2d1af]">
+                <RefreshCcw size={16} /> 새로고침
+              </button>
             </div>
           </div>
         </header>
@@ -100,13 +152,14 @@ export default function Page() {
           <div className="mb-3 flex flex-col gap-3 px-2 pt-1 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-sm font-medium text-zinc-200">World Context</h2>
-              <p className="text-xs text-zinc-500">환율, 증시, 원자재, 디지털 자산으로 보는 오늘의 배경</p>
+              <p className="text-xs text-zinc-500">1분 단위 시장 배경 · 방문 시 갱신 · 일부 지표는 거래소/데이터 제공처에 따라 지연될 수 있음</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => setShowPicker((v) => !v)} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
                 <SlidersHorizontal size={14} /> 데이터 선택
               </button>
-              <div className={`rounded-full border px-3 py-1 text-xs ${marketStatus.includes("Live") || marketStatus.includes("Partial") ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-amber-300/20 bg-amber-300/10 text-amber-200"}`}>{marketStatus}</div>
+              <StatusPill status={marketStatus} />
+              {updatedAt && <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-500">Updated {updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>}
             </div>
           </div>
 
@@ -126,10 +179,7 @@ export default function Page() {
               <div key={item.key} className="min-h-[112px] rounded-3xl border border-white/10 bg-[#151c24] p-3.5">
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <span className="text-xs font-medium text-zinc-400">{item.label}</span>
-                  <span className={`flex items-center gap-1 text-sm font-medium ${item.up ? "text-emerald-400" : "text-red-400"}`}>
-                    {item.up ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                    {item.change}
-                  </span>
+                  <ChangePill up={item.up} change={item.change} />
                 </div>
                 <div className="text-2xl font-semibold tracking-tight text-white">{item.value}</div>
                 <div className="mt-2 text-sm text-zinc-400">{item.note}</div>
@@ -140,15 +190,22 @@ export default function Page() {
         </section>
 
         <section className="mb-6 rounded-[2rem] border border-white/10 bg-[#0d1117] p-7 shadow-2xl">
-          <div className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="mb-7 grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
             <div>
-              <div className="mb-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm text-zinc-300">Today’s Cultural Weather</div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm text-zinc-300">
+                <Activity size={15} /> Attention Weather
+              </div>
               <h2 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight lg:text-5xl">
-                사람들은 지금, 완벽함보다 <span className="text-[#d7c4a1]">기억나는 감각</span>에 반응하고 있어요.
+                지금 관심은 <span className="text-[#d7c4a1]">{topSignal?.title || "핵심 신호"}</span> 쪽으로 기울고 있어요.
               </h2>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400">
+                Google Trends 일간 급상승 검색어와 뉴스/웹 문서 신호를 결합해, 단순 노이즈보다 반복성과 방향성이 있는 흐름을 우선 보여줍니다.
+              </p>
             </div>
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-300 lg:w-72">
-              향수, 작은 사치, 귀여움이 동시에 상승. 음식·비주얼·음악·브랜드에서 정서적 보상이 강한 흐름으로 보입니다.
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-300">
+              <div className="mb-2 flex items-center gap-2 text-white"><Sparkles size={16} /> Signal Logic</div>
+              관심도는 Google Trends 신호, 방향성은 최근 뉴스/웹 문서 증가, 유동성은 시장·소비 반응 프록시로 계산합니다.
+              <div className="mt-3"><StatusPill status={trendStatus} /></div>
             </div>
           </div>
 
@@ -158,7 +215,7 @@ export default function Page() {
                 <div className="text-sm text-zinc-400">Today’s Top 5 Signals</div>
                 <div className="mt-1 text-lg font-semibold">오늘 가장 강하게 보이는 흐름</div>
               </div>
-              <div className={`rounded-full px-3 py-1 text-xs ${trendStatus.includes("Live") ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-300/10 text-amber-200"}`}>{trendStatus}</div>
+              <StatusPill status={trendStatus} />
             </div>
             <div className="grid gap-3 lg:grid-cols-5">
               {trends.slice(0, 5).map((trend) => (
@@ -176,11 +233,42 @@ export default function Page() {
           </div>
         </section>
 
+        <section className="mb-6 rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
+          <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h3 className="text-2xl font-semibold tracking-tight">Attention Flow Map</h3>
+              <p className="text-sm text-zinc-500">X축은 관심 증가 속도, Y축은 유동성/소비/시장 반응 프록시입니다.</p>
+            </div>
+            <div className="text-xs text-zinc-500">오른쪽 위로 갈수록 “관심과 반응이 같이 붙는 흐름”</div>
+          </div>
+          <div className="relative h-[360px] rounded-3xl border border-white/10 bg-[#0d1117] p-4">
+            <div className="absolute left-4 right-4 top-1/2 border-t border-white/10" />
+            <div className="absolute bottom-4 top-4 left-1/2 border-l border-white/10" />
+            <div className="absolute left-4 top-3 text-xs text-zinc-500">유동성/소비 반응 ↑</div>
+            <div className="absolute bottom-3 right-4 text-xs text-zinc-500">관심 증가 속도 →</div>
+            {trends.slice(0, 8).map((trend) => (
+              <div
+                key={trend.rank}
+                className="group absolute -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${Math.min(92, Math.max(8, trend.attention || 50))}%`, top: `${100 - Math.min(88, Math.max(12, trend.liquidity || 50))}%` }}
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d7c4a1]/40 bg-[#d7c4a1] text-sm font-bold text-zinc-950 shadow-lg shadow-black/30">{trend.rank}</div>
+                <div className="pointer-events-none absolute left-1/2 top-12 z-10 hidden w-56 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#151c24] p-3 text-xs text-zinc-300 shadow-2xl group-hover:block">
+                  <div className="mb-1 font-semibold text-white">{trend.title}</div>
+                  <div>Attention: {trend.attention}</div>
+                  <div>Liquidity proxy: {trend.liquidity}</div>
+                  <div>Noise risk: {trend.noise}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <div className="grid gap-6 lg:grid-cols-[1.45fr_0.85fr]">
           <section>
             <div className="mb-4">
               <h3 className="text-2xl font-semibold tracking-tight">Top Macro Trends</h3>
-              <p className="text-sm text-zinc-500">개별 키워드보다 큰 흐름 중심으로 정리</p>
+              <p className="text-sm text-zinc-500">구글 트렌드 기반 관심 신호와 뉴스/웹 신호를 결합한 랭킹</p>
             </div>
             <div className="space-y-3">
               {visibleTrends.map((trend) => (
@@ -195,12 +283,17 @@ export default function Page() {
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">{trend.mood}</span>
                         </div>
                         <p className="max-w-3xl text-sm leading-6 text-zinc-400">{trend.summary}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">{(trend.tags || []).map((tag: string) => <span key={tag} className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-400">#{tag}</span>)}</div>
                       </div>
                     </div>
                     <div className="min-w-52 rounded-2xl border border-white/10 bg-white/5 p-4">
                       <div className="mb-2 flex items-center justify-between text-sm"><span className="text-zinc-400">Trend Score</span><span className="font-semibold text-white">{trend.score}</span></div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#d7c4a1]" style={{ width: `${trend.score}%` }} /></div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-500"><div>Interest</div><div className="text-right font-medium text-emerald-400">{trend.interest}</div><div>Momentum</div><div className="text-right font-medium text-zinc-200">{trend.momentum}</div></div>
+                      <ScoreBar value={trend.score} />
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-500">
+                        <div>Interest</div><div className="text-right font-medium text-emerald-400">{trend.interest}</div>
+                        <div>Liquidity</div><div className="text-right font-medium text-zinc-200">{trend.liquidity}</div>
+                        <div>Noise risk</div><div className="text-right font-medium text-zinc-200">{trend.noise}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -210,12 +303,9 @@ export default function Page() {
 
           <aside className="space-y-6">
             <section className="rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
-              <h3 className="mb-4 text-xl font-semibold">Alpha Signals</h3>
+              <div className="mb-4 flex items-center gap-2"><Flame size={20} className="text-[#d7c4a1]" /><h3 className="text-xl font-semibold">Alpha Signals</h3></div>
               <div className="space-y-3">
-                {(alpha.length ? alpha : [
-                  { title: "개인 홈페이지 부활", category: "Culture / Web", alpha: 87, stage: "Early Signal", reason: "SNS 피로감 이후 자기 세계관을 직접 만들고 싶어하는 흐름." },
-                  { title: "종이 콜라주 감성", category: "Visual", alpha: 84, stage: "Emerging", reason: "손으로 만든 듯한 물성, 테이프, 찢어진 종이 질감." }
-                ]).map((signal, index) => (
+                {(alpha.length ? alpha : []).map((signal, index) => (
                   <div key={signal.title} className="rounded-3xl border border-white/10 bg-white/5 p-4">
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div><div className="text-sm text-zinc-500">#{index + 1} · {signal.category}</div><h4 className="mt-1 font-semibold text-white">{signal.title}</h4></div>
@@ -228,9 +318,21 @@ export default function Page() {
               </div>
             </section>
 
+            <section className="rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
+              <h3 className="mb-4 text-xl font-semibold">Google Rising Searches</h3>
+              <div className="space-y-2">
+                {googleTop.slice(0, 10).map((item, index) => (
+                  <div key={`${item.title}-${index}`} className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-2 text-sm">
+                    <span className="text-zinc-300">{index + 1}. {item.title}</span>
+                    <span className="text-xs text-zinc-500">{item.traffic || "Trend"}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             <section className="rounded-[2rem] border border-[#d7c4a1]/20 bg-[#d7c4a1] p-5 text-zinc-950">
               <div className="mb-2 text-sm text-zinc-700">Trend Radar Note</div>
-              <p className="text-lg font-semibold leading-7">트렌드는 키워드가 아니라 감정의 이동입니다. 음식, 음악, 브랜드, 콘텐츠는 결국 사람들이 지금 무엇을 원하고 두려워하는지 보여줍니다.</p>
+              <p className="text-lg font-semibold leading-7">노이즈는 많지만, 반복적으로 떠오르는 관심·뉴스·시장 반응이 겹치는 곳이 다음 큰 흐름의 후보입니다.</p>
             </section>
           </aside>
         </div>

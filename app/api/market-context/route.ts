@@ -33,22 +33,30 @@ async function fetchYahooQuote(
   base: Omit<MarketSignal, "value" | "change" | "up" | "source">
 ): Promise<MarketSignal> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`;
-    const response = await fetch(url, { next: { revalidate: 60 }, headers: { "User-Agent": "Mozilla/5.0" } });
+    // 1d / 5m로 바꿔 실시간에 더 가까운 흐름을 반영합니다.
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=5m`;
+    const response = await fetch(url, {
+      next: { revalidate: 60 },
+      headers: { "User-Agent": "Mozilla/5.0 TrendRadar/0.2" },
+    });
+
     if (!response.ok) throw new Error(`Yahoo fetch failed: ${symbol}`);
+
     const data = await response.json();
     const result = data?.chart?.result?.[0];
     const meta = result?.meta;
     const closes = result?.indicators?.quote?.[0]?.close?.filter((v: unknown) => typeof v === "number");
+
     const current = meta?.regularMarketPrice ?? closes?.at(-1);
-    const previous = closes?.length > 1 ? closes.at(-2) : meta?.chartPreviousClose;
+    const previous = meta?.chartPreviousClose ?? (closes?.length > 1 ? closes.at(0) : null);
     const pct = current && previous ? ((current - previous) / previous) * 100 : null;
+
     return {
       ...base,
       value: formatNumber(current, { maximumFractionDigits: symbol === "KRW=X" ? 0 : 2 }),
       change: formatPercent(pct),
       up: Number(pct) >= 0,
-      source: "Yahoo",
+      source: "Yahoo 5m",
     };
   } catch {
     return { ...base, value: "—", change: "—", up: true, source: "Demo" };
@@ -61,24 +69,47 @@ async function fetchCryptoContext(): Promise<MarketSignal[]> {
       fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true", { next: { revalidate: 60 } }),
       fetch("https://api.coingecko.com/api/v3/global", { next: { revalidate: 60 } }),
     ]);
+
     if (!btcResponse.ok || !globalResponse.ok) throw new Error("CoinGecko fetch failed");
+
     const btcData = await btcResponse.json();
     const globalData = await globalResponse.json();
+
     const btcPrice = btcData?.bitcoin?.usd;
     const btcChange = btcData?.bitcoin?.usd_24h_change;
+
     const totalCap = globalData?.data?.total_market_cap?.usd;
     const btcDominance = globalData?.data?.market_cap_percentage?.btc;
-    const altCap = totalCap && btcDominance ? totalCap * (1 - btcDominance / 100) : null;
+    const cryptoExBtc = totalCap && btcDominance ? totalCap * (1 - btcDominance / 100) : null;
+
+    // CoinGecko global endpoint는 ex-BTC 전용 24h 변화율을 주지 않으므로,
+    // 전체 크립토 시총 24h 변화율을 프록시로 사용합니다.
     const marketChange = globalData?.data?.market_cap_change_percentage_24h_usd;
 
     return [
-      { key: "btc", label: "BTC", value: formatNumber(btcPrice, { maximumFractionDigits: 0 }), change: formatPercent(btcChange), up: Number(btcChange) >= 0, note: "디지털 자산 심리", source: "CoinGecko" },
-      { key: "altcap", label: "Altcoin Total Market Cap", value: formatCompactUsd(altCap), change: formatPercent(marketChange), up: Number(marketChange) >= 0, note: "알트 시장 흐름", source: "CoinGecko" },
+      {
+        key: "btc",
+        label: "BTC",
+        value: formatNumber(btcPrice, { maximumFractionDigits: 0 }),
+        change: formatPercent(btcChange),
+        up: Number(btcChange) >= 0,
+        note: "디지털 자산 심리",
+        source: "CoinGecko",
+      },
+      {
+        key: "cryptoExBtc",
+        label: "Crypto Ex-BTC Market Cap",
+        value: formatCompactUsd(cryptoExBtc),
+        change: formatPercent(marketChange),
+        up: Number(marketChange) >= 0,
+        note: "BTC 제외 크립토 시총",
+        source: "CoinGecko Global",
+      },
     ];
   } catch {
     return [
       { key: "btc", label: "BTC", value: "—", change: "—", up: true, note: "디지털 자산 심리", source: "Demo" },
-      { key: "altcap", label: "Altcoin Total Market Cap", value: "—", change: "—", up: false, note: "알트 시장 흐름", source: "Demo" },
+      { key: "cryptoExBtc", label: "Crypto Ex-BTC Market Cap", value: "—", change: "—", up: false, note: "BTC 제외 크립토 시총", source: "Demo" },
     ];
   }
 }
@@ -96,6 +127,8 @@ export async function GET() {
   ]);
 
   return NextResponse.json([usdkrw, kospi, sp500, nasdaq, dxy, gold, oil, ...crypto], {
-    headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=120" },
+    headers: {
+      "Cache-Control": "s-maxage=60, stale-while-revalidate=120",
+    },
   });
 }
