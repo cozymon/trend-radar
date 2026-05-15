@@ -13,9 +13,49 @@ import {
   Flame,
   Globe2,
   MapPin,
+  Waves,
+  LineChart,
 } from "lucide-react";
 
-const fallbackMarket = [
+type RegionMode = "KR" | "GLOBAL";
+type ViewMode = "RACE" | "ANALYST";
+
+type MarketItem = {
+  key: string;
+  label: string;
+  value: string;
+  change: string;
+  up: boolean;
+  note: string;
+  source: string;
+};
+
+type TrendItem = {
+  rank: number;
+  title: string;
+  category: string;
+  score: number;
+  interest: string;
+  momentum: string;
+  mood: string;
+  summary: string;
+  tags: string[];
+  attention: number;
+  liquidity: number;
+  noise: number;
+  source: string;
+};
+
+type AlphaItem = {
+  title: string;
+  category: string;
+  alpha: number;
+  stage: string;
+  reason: string;
+  confidence?: number;
+};
+
+const fallbackMarket: MarketItem[] = [
   { key: "usdkrw", label: "USD/KRW", value: "—", change: "—", up: true, note: "수입물가 압박", source: "Demo" },
   { key: "kospi", label: "KOSPI", value: "—", change: "—", up: true, note: "한국 위험자산 심리", source: "Demo" },
   { key: "sp500", label: "S&P 500", value: "—", change: "—", up: true, note: "미국 대형주 흐름", source: "Demo" },
@@ -29,15 +69,16 @@ const fallbackMarket = [
   { key: "cryptoFearGreed", label: "Crypto Fear & Greed", value: "—", change: "—", up: false, note: "크립토 투자심리", source: "Demo" },
 ];
 
-const fallbackTrends = [
+const fallbackTrends: TrendItem[] = [
   { rank: 1, title: "죄책감 없는 디저트", category: "Food", score: 94, interest: "+42%", momentum: "Very High", mood: "작은 사치", summary: "맛있는 걸 먹고 싶지만 건강도 놓치고 싶지 않은 심리.", tags: ["말차", "그릭요거트", "저당"], attention: 84, liquidity: 72, noise: 22, source: "Demo" },
   { rank: 2, title: "촌스럽지만 귀여운 아날로그 감성", category: "Culture", score: 91, interest: "+38%", momentum: "High", mood: "향수", summary: "디카, 콜라주, 종이 질감, 캠 감성이 연결됨.", tags: ["Y2K", "디카", "콜라주"], attention: 78, liquidity: 45, noise: 30, source: "Demo" },
   { rank: 3, title: "AI와 함께 일하는 개인 창작자", category: "Tech / Lifestyle", score: 88, interest: "+35%", momentum: "High", mood: "효율과 불안", summary: "개인이 툴을 조합해 생산성을 높이는 흐름.", tags: ["AI workflow", "1인 창작"], attention: 88, liquidity: 82, noise: 38, source: "Demo" },
   { rank: 4, title: "못생긴 귀여움", category: "Mood / Character", score: 84, interest: "+31%", momentum: "High", mood: "귀여움", summary: "살짝 이상하고 웃긴 캐릭터에 반응하는 흐름.", tags: ["ugly cute", "meme"], attention: 71, liquidity: 36, noise: 45, source: "Demo" },
   { rank: 5, title: "저속노화 라이프스타일", category: "Lifestyle", score: 82, interest: "+29%", momentum: "Medium High", mood: "통제감", summary: "식단, 운동, 수면, 루틴 콘텐츠로 확장.", tags: ["건강", "수면"], attention: 76, liquidity: 68, noise: 28, source: "Demo" },
+  { rank: 6, title: "개인 홈페이지 부활", category: "Culture / Web", score: 78, interest: "+17%", momentum: "Medium", mood: "자기 세계관", summary: "SNS 피로감 이후 자기만의 공간을 만들고 싶은 흐름.", tags: ["홈페이지", "블로그"], attention: 63, liquidity: 42, noise: 26, source: "Demo" },
 ];
 
-const fallbackAlpha = [
+const fallbackAlpha: AlphaItem[] = [
   {
     title: "개인 홈페이지 부활",
     category: "Culture / Web",
@@ -56,13 +97,15 @@ const fallbackAlpha = [
   },
 ];
 
-type RegionMode = "KR" | "GLOBAL";
-
 function ChangePill({ up, change }: { up: boolean; change: string }) {
+  const text = change ?? "—";
+  const isLabel = !text.includes("%") && text !== "—";
   return (
-    <span className={`flex items-center gap-1 text-sm font-medium ${up ? "text-emerald-400" : "text-red-400"}`}>
-      {up ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-      {change}
+    <span className={`flex items-center gap-1 text-sm font-medium ${
+      isLabel ? "text-zinc-300" : up ? "text-emerald-400" : "text-red-400"
+    }`}>
+      {!isLabel ? (up ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />) : null}
+      {text}
     </span>
   );
 }
@@ -76,7 +119,7 @@ function ScoreBar({ value }: { value: number }) {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const good = status.includes("Live") || status.includes("Partial") || status.includes("Google");
+  const good = status.includes("Live") || status.includes("Partial") || status.includes("Google") || status.includes("Trends") || status.includes("signals");
   return (
     <div className={`rounded-full border px-3 py-1 text-xs ${
       good ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-amber-300/20 bg-amber-300/10 text-amber-200"
@@ -114,11 +157,193 @@ function RegionButton({
   );
 }
 
+function ViewButton({
+  active,
+  label,
+  icon,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition ${
+        active ? "border-[#d7c4a1]/60 bg-[#d7c4a1] text-zinc-950" : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function getCategoryTint(category: string) {
+  const lower = category.toLowerCase();
+  if (lower.includes("food")) return "from-yellow-200 to-amber-300";
+  if (lower.includes("tech")) return "from-sky-200 to-cyan-300";
+  if (lower.includes("life")) return "from-emerald-200 to-green-300";
+  if (lower.includes("culture")) return "from-violet-200 to-fuchsia-300";
+  if (lower.includes("money")) return "from-orange-200 to-red-300";
+  if (lower.includes("brand")) return "from-pink-200 to-rose-300";
+  return "from-stone-200 to-zinc-300";
+}
+
+function TrendRace({
+  trends,
+  alpha,
+  regionLabel,
+}: {
+  trends: TrendItem[];
+  alpha: AlphaItem[];
+  regionLabel: string;
+}) {
+  const alphaTitles = new Set(alpha.map((item) => item.title));
+  const raceTrends = trends.slice(0, 6);
+
+  return (
+    <section className="mb-6 rounded-[2rem] border border-white/10 bg-[#10161d]/85 p-5 shadow-2xl">
+      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm text-zinc-300">
+            <Waves size={15} /> {regionLabel} Trend Race
+          </div>
+          <h3 className="text-2xl font-semibold tracking-tight">헤엄치듯 앞으로 가는 트렌드 흐름</h3>
+          <p className="mt-2 text-sm leading-6 text-zinc-500">
+            앞서가는 오리가 지금 가장 강한 트렌드입니다. 더 빠르게 흔들릴수록 관심 속도가 높고, 뒤 물결이 클수록 유동성/소비 반응이 큰 흐름입니다.
+          </p>
+        </div>
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-xs leading-6 text-zinc-400 lg:max-w-md">
+          <div><span className="font-medium text-white">가로 위치</span> = 현재 종합 순위/점수</div>
+          <div><span className="font-medium text-white">움직임 속도</span> = 관심 증가 속도</div>
+          <div><span className="font-medium text-white">물결 크기</span> = 유동성/소비 반응</div>
+          <div><span className="font-medium text-white">Alpha 배지</span> = 아직 작지만 빨리 커지는 신호</div>
+        </div>
+      </div>
+
+      <div className="rounded-[1.75rem] border border-white/10 bg-[#0c1016] p-4">
+        <div className="mb-3 flex items-center justify-between text-xs text-zinc-500">
+          <span>출발선</span>
+          <span>도착선 — 더 오른쪽일수록 현재 더 핫함</span>
+        </div>
+
+        <div className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#08111e]">
+          <div className="absolute inset-0 water-lines opacity-60" />
+          <div className="relative px-4 py-3">
+            {raceTrends.map((trend, index) => {
+              const left = 8 + ((trend.score - 45) / 53) * 78;
+              const duckColor = getCategoryTint(trend.category);
+              const waveWidth = 56 + (trend.liquidity || 50) * 0.9;
+              const animDuration = `${Math.max(1.4, 3.6 - (trend.attention || 50) / 50)}s`;
+              const isAlpha = alphaTitles.has(trend.title);
+
+              return (
+                <div key={trend.title} className="relative mb-3 last:mb-0">
+                  <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/10" />
+                  <div className="relative flex h-[86px] items-center">
+                    <div className="z-10 flex w-44 shrink-0 items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-sm font-semibold text-white">
+                        #{trend.rank}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{trend.title}</div>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
+                          <span>{trend.category}</span>
+                          <span className="text-emerald-400">{trend.interest}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative h-full flex-1">
+                      <div className="absolute left-0 top-1/2 h-8 w-full -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.15),transparent_60%)]" />
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-cyan-300/35 via-blue-300/20 to-transparent blur-sm wave-pulse"
+                        style={{ left: `calc(${left}% - ${waveWidth}px)`, width: `${waveWidth}px`, height: "16px" }}
+                      />
+                      <div
+                        className="duck-bob absolute top-1/2 -translate-y-1/2"
+                        style={{ left: `${left}%`, animationDuration: animDuration }}
+                      >
+                        <div className={`relative min-w-[210px] rounded-full border border-white/15 bg-gradient-to-br ${duckColor} px-4 py-2 text-zinc-950 shadow-[0_12px_40px_rgba(0,0,0,0.35)]`}>
+                          <div className="flex items-center gap-3">
+                            <div className="text-2xl">🦆</div>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold">{trend.title}</div>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-800/80">
+                                <span>Speed {trend.attention}</span>
+                                <span>Liquidity {trend.liquidity}</span>
+                                <span>Noise {trend.noise}</span>
+                              </div>
+                            </div>
+                            {isAlpha ? (
+                              <div className="rounded-full bg-zinc-950 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#f4d88a]">
+                                Alpha
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ml-3 hidden w-20 shrink-0 text-right text-xs text-zinc-500 lg:block">
+                      <div>Score {trend.score}</div>
+                      <div className="mt-1">{trend.momentum}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AnalystMap({ trends, regionLabel }: { trends: TrendItem[]; regionLabel: string }) {
+  return (
+    <section className="mb-6 rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-2xl font-semibold tracking-tight">{regionLabel} Flow Radar</h3>
+          <p className="text-sm text-zinc-500">X축은 관심 증가 속도, Y축은 유동성/소비/시장 반응 프록시입니다.</p>
+        </div>
+        <div className="text-xs text-zinc-500">오른쪽 위로 갈수록 “관심과 반응이 같이 붙는 흐름”</div>
+      </div>
+      <div className="relative h-[360px] rounded-3xl border border-white/10 bg-[#0d1117] p-4">
+        <div className="absolute left-4 right-4 top-1/2 border-t border-white/10" />
+        <div className="absolute bottom-4 top-4 left-1/2 border-l border-white/10" />
+        <div className="absolute left-4 top-3 text-xs text-zinc-500">유동성/소비 반응 ↑</div>
+        <div className="absolute bottom-3 right-4 text-xs text-zinc-500">관심 증가 속도 →</div>
+        {trends.slice(0, 8).map((trend) => (
+          <div
+            key={trend.rank}
+            className="group absolute -translate-x-1/2 -translate-y-1/2"
+            style={{ left: `${Math.min(92, Math.max(8, trend.attention || 50))}%`, top: `${100 - Math.min(88, Math.max(12, trend.liquidity || 50))}%` }}
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d7c4a1]/40 bg-[#d7c4a1] text-sm font-bold text-zinc-950 shadow-lg shadow-black/30">{trend.rank}</div>
+            <div className="pointer-events-none absolute left-1/2 top-12 z-10 hidden w-56 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#151c24] p-3 text-xs text-zinc-300 shadow-2xl group-hover:block">
+              <div className="mb-1 font-semibold text-white">{trend.title}</div>
+              <div>Attention: {trend.attention}</div>
+              <div>Liquidity proxy: {trend.liquidity}</div>
+              <div>Noise risk: {trend.noise}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Page() {
   const [region, setRegion] = useState<RegionMode>("KR");
-  const [market, setMarket] = useState(fallbackMarket);
-  const [trends, setTrends] = useState(fallbackTrends);
-  const [alpha, setAlpha] = useState<any[]>(fallbackAlpha);
+  const [view, setView] = useState<ViewMode>("RACE");
+  const [market, setMarket] = useState<MarketItem[]>(fallbackMarket);
+  const [trends, setTrends] = useState<TrendItem[]>(fallbackTrends);
+  const [alpha, setAlpha] = useState<AlphaItem[]>(fallbackAlpha);
   const [googleTop, setGoogleTop] = useState<any[]>([]);
   const [marketStatus, setMarketStatus] = useState("Connecting live data");
   const [trendStatus, setTrendStatus] = useState("Connecting trend data");
@@ -308,36 +533,16 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="mb-6 rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
-          <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h3 className="text-2xl font-semibold tracking-tight">{regionLabel} Flow Radar</h3>
-              <p className="text-sm text-zinc-500">X축은 관심 증가 속도, Y축은 유동성/소비/시장 반응 프록시입니다.</p>
-            </div>
-            <div className="text-xs text-zinc-500">오른쪽 위로 갈수록 “관심과 반응이 같이 붙는 흐름”</div>
-          </div>
-          <div className="relative h-[360px] rounded-3xl border border-white/10 bg-[#0d1117] p-4">
-            <div className="absolute left-4 right-4 top-1/2 border-t border-white/10" />
-            <div className="absolute bottom-4 top-4 left-1/2 border-l border-white/10" />
-            <div className="absolute left-4 top-3 text-xs text-zinc-500">유동성/소비 반응 ↑</div>
-            <div className="absolute bottom-3 right-4 text-xs text-zinc-500">관심 증가 속도 →</div>
-            {trends.slice(0, 8).map((trend) => (
-              <div
-                key={trend.rank}
-                className="group absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${Math.min(92, Math.max(8, trend.attention || 50))}%`, top: `${100 - Math.min(88, Math.max(12, trend.liquidity || 50))}%` }}
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d7c4a1]/40 bg-[#d7c4a1] text-sm font-bold text-zinc-950 shadow-lg shadow-black/30">{trend.rank}</div>
-                <div className="pointer-events-none absolute left-1/2 top-12 z-10 hidden w-56 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#151c24] p-3 text-xs text-zinc-300 shadow-2xl group-hover:block">
-                  <div className="mb-1 font-semibold text-white">{trend.title}</div>
-                  <div>Attention: {trend.attention}</div>
-                  <div>Liquidity proxy: {trend.liquidity}</div>
-                  <div>Noise risk: {trend.noise}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <section className="mb-6 flex flex-wrap items-center gap-2">
+          <ViewButton active={view === "RACE"} label="Race View" icon={<Waves size={16} />} onClick={() => setView("RACE")} />
+          <ViewButton active={view === "ANALYST"} label="Analyst View" icon={<LineChart size={16} />} onClick={() => setView("ANALYST")} />
         </section>
+
+        {view === "RACE" ? (
+          <TrendRace trends={trends} alpha={alpha} regionLabel={regionLabel} />
+        ) : (
+          <AnalystMap trends={trends} regionLabel={regionLabel} />
+        )}
 
         <div className="grid gap-6 lg:grid-cols-[1.45fr_0.85fr]">
           <section>
@@ -390,7 +595,10 @@ export default function Page() {
                       <div><div className="text-sm text-zinc-500">#{index + 1} · {signal.category}</div><h4 className="mt-1 font-semibold text-white">{signal.title}</h4></div>
                       <div className="rounded-2xl bg-[#d7c4a1] px-3 py-1 text-sm font-semibold text-zinc-950">{signal.alpha}</div>
                     </div>
-                    <div className="mb-2 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs text-zinc-300">{signal.stage}</div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs text-zinc-300">{signal.stage}</div>
+                      {signal.confidence ? <div className="inline-flex rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-400">Confidence {signal.confidence}</div> : null}
+                    </div>
                     <p className="text-sm leading-6 text-zinc-400">{signal.reason}</p>
                   </div>
                 ))}
@@ -411,7 +619,7 @@ export default function Page() {
 
             <section className="rounded-[2rem] border border-[#d7c4a1]/20 bg-[#d7c4a1] p-5 text-zinc-950">
               <div className="mb-2 text-sm text-zinc-700">Trend Radar Note</div>
-              <p className="text-lg font-semibold leading-7">국내와 전세계 트렌드는 다르게 움직입니다. 같은 키워드라도 어느 지역에서 먼저 뜨는지 보는 것이 핵심입니다.</p>
+              <p className="text-lg font-semibold leading-7">같은 트렌드라도 어느 지역에서 먼저 속도를 붙이는지, 그리고 단순 화제가 아니라 실제 반응까지 이어지는지가 핵심입니다.</p>
             </section>
           </aside>
         </div>
