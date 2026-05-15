@@ -11,6 +11,8 @@ import {
   Activity,
   Sparkles,
   Flame,
+  Globe2,
+  MapPin,
 } from "lucide-react";
 
 const fallbackMarket = [
@@ -23,6 +25,8 @@ const fallbackMarket = [
   { key: "oil", label: "Oil", value: "—", change: "—", up: false, note: "생활비 영향", source: "Demo" },
   { key: "btc", label: "BTC", value: "—", change: "—", up: true, note: "디지털 자산 심리", source: "Demo" },
   { key: "cryptoExBtc", label: "Crypto Ex-BTC Market Cap", value: "—", change: "—", up: false, note: "BTC 제외 크립토 시총", source: "Demo" },
+  { key: "kimchiPremium", label: "Kimchi Premium", value: "—", change: "—", up: true, note: "국내 BTC 프리미엄", source: "Demo" },
+  { key: "cryptoFearGreed", label: "Crypto Fear & Greed", value: "—", change: "—", up: false, note: "크립토 투자심리", source: "Demo" },
 ];
 
 const fallbackTrends = [
@@ -50,15 +54,9 @@ const fallbackAlpha = [
     reason: "AI 이미지가 많아질수록 손으로 만든 듯한 물성과 아날로그 질감이 주목받습니다.",
     confidence: 58,
   },
-  {
-    title: "조용한 팬덤형 브랜드",
-    category: "Brand",
-    alpha: 81,
-    stage: "Early Signal",
-    reason: "큰 광고보다 작은 커뮤니티와 세계관을 가진 브랜드에 오래 머무는 흐름입니다.",
-    confidence: 55,
-  },
 ];
+
+type RegionMode = "KR" | "GLOBAL";
 
 function ChangePill({ up, change }: { up: boolean; change: string }) {
   return (
@@ -88,7 +86,36 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+function RegionButton({
+  active,
+  label,
+  desc,
+  icon,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  desc: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-3xl border p-4 text-left transition ${
+        active
+          ? "border-[#d7c4a1]/60 bg-[#d7c4a1] text-zinc-950"
+          : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+      }`}
+    >
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold">{icon}{label}</div>
+      <div className={`text-xs leading-5 ${active ? "text-zinc-700" : "text-zinc-500"}`}>{desc}</div>
+    </button>
+  );
+}
+
 export default function Page() {
+  const [region, setRegion] = useState<RegionMode>("KR");
   const [market, setMarket] = useState(fallbackMarket);
   const [trends, setTrends] = useState(fallbackTrends);
   const [alpha, setAlpha] = useState<any[]>(fallbackAlpha);
@@ -100,7 +127,7 @@ export default function Page() {
   const [selected, setSelected] = useState(fallbackMarket.map((x) => x.key));
   const [query, setQuery] = useState("");
 
-  const loadData = async () => {
+  const loadData = async (targetRegion = region) => {
     try {
       setMarketStatus("Refreshing market data");
       const res = await fetch("/api/market-context?fresh=1", { cache: "no-store" });
@@ -116,18 +143,19 @@ export default function Page() {
     }
 
     try {
-      setTrendStatus("Refreshing trend data");
-      const res = await fetch("/api/trend-signals?fresh=1", { cache: "no-store" });
+      setTrendStatus(`Refreshing ${targetRegion === "KR" ? "Korea" : "Global"} trend data`);
+      const res = await fetch(`/api/trend-signals?region=${targetRegion}&fresh=1`, { cache: "no-store" });
       const data = await res.json();
       if (data?.trends) {
         setTrends(data.trends);
-        setAlpha(data.alphaSignals || []);
+        setAlpha(data.alphaSignals || fallbackAlpha);
         setGoogleTop(data.googleTopSearches || []);
-        setTrendStatus(data.sourceLabel || "Google Trends + News signals");
+        setTrendStatus(data.sourceLabel || (targetRegion === "KR" ? "Korea trends" : "Global trends"));
       } else {
         throw new Error("bad trend data");
       }
     } catch {
+      setTrends(fallbackTrends);
       setAlpha(fallbackAlpha);
       setTrendStatus("Demo trend data");
     }
@@ -136,18 +164,22 @@ export default function Page() {
   };
 
   useEffect(() => {
-    loadData();
-    const marketTimer = setInterval(loadData, 60_000);
-    return () => clearInterval(marketTimer);
-  }, []);
+    loadData(region);
+    const timer = setInterval(() => loadData(region), 60_000);
+    return () => clearInterval(timer);
+  }, [region]);
 
   const visibleMarket = market.filter((item) => selected.includes(item.key));
-  const visibleTrends = trends.filter((t) => {
+  const visibleTrends = useMemo(() => {
     const q = query.toLowerCase().trim();
-    return !q || t.title.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || (t.tags || []).some((tag: string) => tag.toLowerCase().includes(q));
-  });
+    return trends.filter((t) => !q || t.title.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || (t.tags || []).some((tag: string) => tag.toLowerCase().includes(q)));
+  }, [trends, query]);
 
   const topSignal = trends[0];
+  const regionLabel = region === "KR" ? "국내" : "전세계";
+  const flowCopy = region === "KR"
+    ? "국내 검색 관심과 뉴스/웹 신호를 중심으로 한국 소비·문화 흐름을 봅니다."
+    : "글로벌 검색 관심과 뉴스/웹 신호를 중심으로 전세계 문화·기술 흐름을 봅니다.";
 
   return (
     <main className="min-h-screen bg-[#070b0f] text-zinc-100">
@@ -169,12 +201,29 @@ export default function Page() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={17} />
                 <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="트렌드, 감정, 음식, 문화 검색" className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-500 sm:w-80" />
               </div>
-              <button onClick={loadData} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#d7c4a1] px-4 text-sm font-medium text-zinc-950 hover:bg-[#e2d1af]">
+              <button onClick={() => loadData(region)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#d7c4a1] px-4 text-sm font-medium text-zinc-950 hover:bg-[#e2d1af]">
                 <RefreshCcw size={16} /> 새로고침
               </button>
             </div>
           </div>
         </header>
+
+        <section className="mb-6 grid gap-3 lg:grid-cols-2">
+          <RegionButton
+            active={region === "KR"}
+            label="국내 트렌드"
+            desc="한국 Google Trends, 국내 소비·문화 키워드, 한국 뉴스 신호 중심"
+            icon={<MapPin size={16} />}
+            onClick={() => setRegion("KR")}
+          />
+          <RegionButton
+            active={region === "GLOBAL"}
+            label="전세계 트렌드"
+            desc="글로벌 Google Trends, 글로벌 뉴스/웹 신호, 전세계 문화·기술 흐름 중심"
+            icon={<Globe2 size={16} />}
+            onClick={() => setRegion("GLOBAL")}
+          />
+        </section>
 
         <section className="mb-6 rounded-[2rem] border border-white/10 bg-[#10161d]/75 p-4 shadow-2xl">
           <div className="mb-3 flex flex-col gap-3 px-2 pt-1 lg:flex-row lg:items-center lg:justify-between">
@@ -221,18 +270,16 @@ export default function Page() {
           <div className="mb-7 grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm text-zinc-300">
-                <Activity size={15} /> Attention Weather
+                <Activity size={15} /> {regionLabel} Attention Weather
               </div>
               <h2 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight lg:text-5xl">
-                지금 관심은 <span className="text-[#d7c4a1]">{topSignal?.title || "핵심 신호"}</span> 쪽으로 기울고 있어요.
+                {regionLabel} 관심은 <span className="text-[#d7c4a1]">{topSignal?.title || "핵심 신호"}</span> 쪽으로 기울고 있어요.
               </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400">
-                Google Trends 일간 급상승 검색어와 뉴스/웹 문서 신호를 결합해, 단순 노이즈보다 반복성과 방향성이 있는 흐름을 우선 보여줍니다.
-              </p>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400">{flowCopy}</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-300">
               <div className="mb-2 flex items-center gap-2 text-white"><Sparkles size={16} /> Signal Logic</div>
-              관심도는 Google Trends 신호, 방향성은 최근 뉴스/웹 문서 증가, 유동성은 시장·소비 반응 프록시로 계산합니다.
+              지역 탭에 따라 Google Trends geo와 키워드 풀이 바뀝니다. 국내는 KR, 전세계는 글로벌/US 기반 프록시와 GDELT 글로벌 신호를 사용합니다.
               <div className="mt-3"><StatusPill status={trendStatus} /></div>
             </div>
           </div>
@@ -240,8 +287,8 @@ export default function Page() {
           <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-4">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <div className="text-sm text-zinc-400">Today’s Top 5 Signals</div>
-                <div className="mt-1 text-lg font-semibold">오늘 가장 강하게 보이는 흐름</div>
+                <div className="text-sm text-zinc-400">{regionLabel} Top 5 Signals</div>
+                <div className="mt-1 text-lg font-semibold">지금 가장 강하게 보이는 흐름</div>
               </div>
               <StatusPill status={trendStatus} />
             </div>
@@ -264,7 +311,7 @@ export default function Page() {
         <section className="mb-6 rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
           <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h3 className="text-2xl font-semibold tracking-tight">Attention Flow Map</h3>
+              <h3 className="text-2xl font-semibold tracking-tight">{regionLabel} Flow Radar</h3>
               <p className="text-sm text-zinc-500">X축은 관심 증가 속도, Y축은 유동성/소비/시장 반응 프록시입니다.</p>
             </div>
             <div className="text-xs text-zinc-500">오른쪽 위로 갈수록 “관심과 반응이 같이 붙는 흐름”</div>
@@ -295,8 +342,8 @@ export default function Page() {
         <div className="grid gap-6 lg:grid-cols-[1.45fr_0.85fr]">
           <section>
             <div className="mb-4">
-              <h3 className="text-2xl font-semibold tracking-tight">Top Macro Trends</h3>
-              <p className="text-sm text-zinc-500">구글 트렌드 기반 관심 신호와 뉴스/웹 신호를 결합한 랭킹</p>
+              <h3 className="text-2xl font-semibold tracking-tight">{regionLabel} Top Macro Trends</h3>
+              <p className="text-sm text-zinc-500">지역별 검색 관심 신호와 뉴스/웹 신호를 결합한 랭킹</p>
             </div>
             <div className="space-y-3">
               {visibleTrends.map((trend) => (
@@ -332,10 +379,10 @@ export default function Page() {
           <aside className="space-y-6">
             <section className="rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
               <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2"><Flame size={20} className="text-[#d7c4a1]" /><h3 className="text-xl font-semibold">Alpha Signals</h3></div>
+                <div className="flex items-center gap-2"><Flame size={20} className="text-[#d7c4a1]" /><h3 className="text-xl font-semibold">{regionLabel} Alpha Signals</h3></div>
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-zinc-400">Beta</span>
               </div>
-              <p className="mb-4 text-xs leading-5 text-zinc-500">초기 신호는 단순 랭킹이 아니라, 관심 상승률은 높은데 아직 메인스트림 볼륨은 낮고 노이즈가 낮은 후보를 우선 표시합니다.</p>
+              <p className="mb-4 text-xs leading-5 text-zinc-500">지역별로 아직 작지만 빠르게 커지는 신호를 우선 표시합니다.</p>
               <div className="space-y-3">
                 {(alpha.length ? alpha : fallbackAlpha).map((signal, index) => (
                   <div key={signal.title} className="rounded-3xl border border-white/10 bg-white/5 p-4">
@@ -351,7 +398,7 @@ export default function Page() {
             </section>
 
             <section className="rounded-[2rem] border border-white/10 bg-[#10161d]/80 p-5">
-              <h3 className="mb-4 text-xl font-semibold">Google Rising Searches</h3>
+              <h3 className="mb-4 text-xl font-semibold">{regionLabel} Rising Searches</h3>
               <div className="space-y-2">
                 {googleTop.slice(0, 10).map((item, index) => (
                   <div key={`${item.title}-${index}`} className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-2 text-sm">
@@ -364,7 +411,7 @@ export default function Page() {
 
             <section className="rounded-[2rem] border border-[#d7c4a1]/20 bg-[#d7c4a1] p-5 text-zinc-950">
               <div className="mb-2 text-sm text-zinc-700">Trend Radar Note</div>
-              <p className="text-lg font-semibold leading-7">노이즈는 많지만, 반복적으로 떠오르는 관심·뉴스·시장 반응이 겹치는 곳이 다음 큰 흐름의 후보입니다.</p>
+              <p className="text-lg font-semibold leading-7">국내와 전세계 트렌드는 다르게 움직입니다. 같은 키워드라도 어느 지역에서 먼저 뜨는지 보는 것이 핵심입니다.</p>
             </section>
           </aside>
         </div>

@@ -63,11 +63,82 @@ async function fetchYahooQuote(
   }
 }
 
+async function fetchUpbitBtcKrw() {
+  const response = await fetch("https://api.upbit.com/v1/ticker?markets=KRW-BTC", {
+    next: { revalidate: 60 },
+    headers: { accept: "application/json" },
+  });
+
+  if (!response.ok) throw new Error("Upbit fetch failed");
+
+  const data = await response.json();
+  return Number(data?.[0]?.trade_price);
+}
+
+async function fetchYahooUsdKrwNumber() {
+  try {
+    const url = "https://query1.finance.yahoo.com/v8/finance/chart/KRW=X?range=1d&interval=5m";
+    const response = await fetch(url, {
+      next: { revalidate: 60 },
+      headers: { "User-Agent": "Mozilla/5.0 TrendRadar/0.5" },
+    });
+
+    if (!response.ok) throw new Error("Yahoo USDKRW failed");
+
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    const meta = result?.meta;
+    const closes = result?.indicators?.quote?.[0]?.close?.filter((v: unknown) => typeof v === "number");
+    return Number(meta?.regularMarketPrice ?? closes?.at(-1));
+  } catch {
+    return null;
+  }
+}
+
+async function fetchFearGreedIndex(): Promise<MarketSignal> {
+  try {
+    const response = await fetch("https://api.alternative.me/fng/?limit=1&format=json", {
+      next: { revalidate: 1800 },
+      headers: { "User-Agent": "Mozilla/5.0 TrendRadar/0.5" },
+    });
+
+    if (!response.ok) throw new Error("Fear & Greed fetch failed");
+
+    const data = await response.json();
+    const item = data?.data?.[0];
+    const value = Number(item?.value);
+    const classification = item?.value_classification || "Sentiment";
+
+    return {
+      key: "cryptoFearGreed",
+      label: "Crypto Fear & Greed",
+      value: Number.isFinite(value) ? String(value) : "—",
+      change: classification,
+      up: value >= 50,
+      note: "크립토 투자심리",
+      source: "Alternative.me",
+    };
+  } catch {
+    return {
+      key: "cryptoFearGreed",
+      label: "Crypto Fear & Greed",
+      value: "—",
+      change: "—",
+      up: false,
+      note: "크립토 투자심리",
+      source: "Demo",
+    };
+  }
+}
+
 async function fetchCryptoContext(): Promise<MarketSignal[]> {
   try {
-    const [btcResponse, globalResponse] = await Promise.all([
+    const [btcResponse, globalResponse, upbitBtcKrwResult, usdKrwResult, fearGreed] = await Promise.all([
       fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true", { next: { revalidate: 60 } }),
       fetch("https://api.coingecko.com/api/v3/global", { next: { revalidate: 60 } }),
+      fetchUpbitBtcKrw().catch(() => null),
+      fetchYahooUsdKrwNumber(),
+      fetchFearGreedIndex(),
     ]);
 
     if (!btcResponse.ok || !globalResponse.ok) throw new Error("CoinGecko fetch failed");
@@ -75,7 +146,7 @@ async function fetchCryptoContext(): Promise<MarketSignal[]> {
     const btcData = await btcResponse.json();
     const globalData = await globalResponse.json();
 
-    const btcPrice = btcData?.bitcoin?.usd;
+    const btcPrice = Number(btcData?.bitcoin?.usd);
     const btcChange = btcData?.bitcoin?.usd_24h_change;
 
     const totalCap = globalData?.data?.total_market_cap?.usd;
@@ -85,6 +156,23 @@ async function fetchCryptoContext(): Promise<MarketSignal[]> {
     // CoinGecko global endpoint는 ex-BTC 전용 24h 변화율을 주지 않으므로,
     // 전체 크립토 시총 24h 변화율을 프록시로 사용합니다.
     const marketChange = globalData?.data?.market_cap_change_percentage_24h_usd;
+
+    const upbitBtcKrw = typeof upbitBtcKrwResult === "number" ? upbitBtcKrwResult : null;
+    const usdKrw = typeof usdKrwResult === "number" ? usdKrwResult : null;
+    const kimchiPremium =
+      upbitBtcKrw && btcPrice && usdKrw
+        ? ((upbitBtcKrw / (btcPrice * usdKrw)) - 1) * 100
+        : null;
+
+    const kimchiSignal: MarketSignal = {
+      key: "kimchiPremium",
+      label: "Kimchi Premium",
+      value: kimchiPremium === null ? "—" : formatPercent(kimchiPremium),
+      change: kimchiPremium === null ? "—" : (kimchiPremium >= 0 ? "Premium" : "Discount"),
+      up: kimchiPremium === null ? true : kimchiPremium >= 0,
+      note: "국내 BTC 프리미엄",
+      source: kimchiPremium === null ? "Demo" : "Upbit/CoinGecko",
+    };
 
     return [
       {
@@ -105,11 +193,15 @@ async function fetchCryptoContext(): Promise<MarketSignal[]> {
         note: "BTC 제외 크립토 시총",
         source: "CoinGecko Global",
       },
+      kimchiSignal,
+      fearGreed,
     ];
   } catch {
     return [
       { key: "btc", label: "BTC", value: "—", change: "—", up: true, note: "디지털 자산 심리", source: "Demo" },
       { key: "cryptoExBtc", label: "Crypto Ex-BTC Market Cap", value: "—", change: "—", up: false, note: "BTC 제외 크립토 시총", source: "Demo" },
+      { key: "kimchiPremium", label: "Kimchi Premium", value: "—", change: "—", up: true, note: "국내 BTC 프리미엄", source: "Demo" },
+      { key: "cryptoFearGreed", label: "Crypto Fear & Greed", value: "—", change: "—", up: false, note: "크립토 투자심리", source: "Demo" },
     ];
   }
 }
